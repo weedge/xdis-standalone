@@ -12,19 +12,26 @@ import (
 	"github.com/weedge/xdis-standalone/config"
 )
 
+type OnAccept func(conn redcon.Conn) bool
+type OnClosed func(conn redcon.Conn, err error)
+
 type RespCmdService struct {
 	opts *config.RespCmdServiceOptions
 	// redcon server handler
 	mux *redcon.ServeMux
 	// redcon server
 	redconSrv *redcon.Server
+	onAccept  OnAccept
+	onClosed  OnClosed
+	handles   map[string]driver.CmdHandle
+
 	// storager
 	store driver.IStorager
 
 	// mutex lock for respConnMap add/delete
 	rcm sync.Mutex
 	// resp cmd connects map
-	respConnMap map[*RespCmdConn]struct{}
+	respConnMap map[driver.IRespConn]struct{}
 }
 
 func New(opts *config.RespCmdServiceOptions) (srv *RespCmdService) {
@@ -34,8 +41,11 @@ func New(opts *config.RespCmdServiceOptions) (srv *RespCmdService) {
 	srv = &RespCmdService{
 		opts:        opts,
 		mux:         redcon.NewServeMux(),
-		respConnMap: map[*RespCmdConn]struct{}{},
+		respConnMap: map[driver.IRespConn]struct{}{},
 	}
+	srv.onAccept = srv.OnAccept
+	srv.onClosed = srv.OnClosed
+	srv.handles = driver.RegisteredCmdHandles
 
 	return
 }
@@ -60,12 +70,16 @@ func (s *RespCmdService) Close() (err error) {
 		klog.Infof("close resp cmd service ok")
 	}
 
-	s.closeAllRespCmdConnect()
+	s.CloseAllRespCmdConnect()
 	return
 }
 
-func (s *RespCmdService) registerRespCmdConnHandle() {
-	for cmdOp := range driver.RegisteredCmdHandles {
+func (s *RespCmdService) SetRegisteredCmdHandles(handles map[string]driver.CmdHandle) {
+	s.handles = handles
+}
+
+func (s *RespCmdService) RegisterRespCmdConnHandle() {
+	for cmdOp := range s.handles {
 		s.mux.HandleFunc(cmdOp, func(conn redcon.Conn, cmd redcon.Command) {
 			cmdOp := utils.SliceByteToString(cmd.Args[0])
 			params := [][]byte{}
@@ -123,47 +137,60 @@ func (s *RespCmdService) InitRespConn(ctx context.Context, dbIdx int) driver.IRe
 	return conn
 }
 
+func (s *RespCmdService) SetOnAccept(onAccept OnAccept) {
+	s.onAccept = onAccept
+}
+
+func (s *RespCmdService) SetOnClosed(onClosed OnClosed) {
+	s.onClosed = onClosed
+}
+
+func (s *RespCmdService) OnAccept(conn redcon.Conn) bool {
+	klog.Infof("accept: %s", conn.RemoteAddr())
+
+	// todo: get net.Conn request info set to context Value for trace
+	// add resp cmd conn
+	respConn := s.InitRespConn(context.Background(), 0)
+	respCmdConn := respConn.(*RespCmdConn)
+	respCmdConn.SetRedConn(conn)
+	s.AddRespCmdConn(respCmdConn)
+
+	// set ctx
+	conn.SetContext(respConn)
+	return true
+}
+
+func (s *RespCmdService) OnClosed(conn redcon.Conn, err error) {
+	logF := klog.Infof
+	if err != nil {
+		logF = klog.Errorf
+	}
+	logF("closed by %s, err: %v", conn.RemoteAddr(), err)
+
+	// del resp cmd conn
+	respConn, ok := conn.Context().(driver.IRespConn)
+	if !ok {
+		klog.Errorf("resp cmd connect client init err")
+		return
+	}
+	respCmdConn := respConn.(*RespCmdConn)
+	s.DelRespCmdConn(respCmdConn)
+}
+
 func (s *RespCmdService) Start(ctx context.Context) (err error) {
 	//RESP cmd tcp server
 	s.redconSrv = redcon.NewServer(s.opts.Addr, s.mux.ServeRESP,
 		// use this function to accept (return true) or deny the connection (return false).
-		func(conn redcon.Conn) bool {
-			klog.Infof("accept: %s", conn.RemoteAddr())
-
-			// add resp cmd conn
-			respConn := s.InitRespConn(ctx, 0)
-			respCmdConn := respConn.(*RespCmdConn)
-			respCmdConn.SetRedConn(conn)
-			s.addRespCmdConn(respCmdConn)
-
-			// set ctx
-			conn.SetContext(respConn)
-			return true
-		},
+		s.onAccept,
 		// this is called when the connection has been closed by remote client
-		func(conn redcon.Conn, err error) {
-			logF := klog.Infof
-			if err != nil {
-				logF = klog.Errorf
-			}
-			logF("closed by %s, err: %v", conn.RemoteAddr(), err)
-
-			// del resp cmd conn
-			respConn, ok := conn.Context().(driver.IRespConn)
-			if !ok {
-				klog.Errorf("resp cmd connect client init err")
-				return
-			}
-			respCmdConn := respConn.(*RespCmdConn)
-			s.delRespCmdConn(respCmdConn)
-		},
+		s.onClosed,
 	)
 
 	if s.opts.ConnKeepaliveInterval > 0 {
 		s.redconSrv.SetIdleClose(time.Duration(s.opts.ConnKeepaliveInterval))
 	}
 
-	s.registerRespCmdConnHandle()
+	s.RegisterRespCmdConnHandle()
 
 	listenErrSignal := make(chan error)
 	go func() {
@@ -181,22 +208,26 @@ func (s *RespCmdService) Start(ctx context.Context) (err error) {
 	return
 }
 
-func (s *RespCmdService) addRespCmdConn(c *RespCmdConn) {
+func (s *RespCmdService) AddRespCmdConn(c driver.IRespConn) {
 	s.rcm.Lock()
 	s.respConnMap[c] = struct{}{}
 	s.rcm.Unlock()
 }
 
-func (s *RespCmdService) delRespCmdConn(c *RespCmdConn) {
+func (s *RespCmdService) DelRespCmdConn(c driver.IRespConn) {
 	s.rcm.Lock()
 	delete(s.respConnMap, c)
 	s.rcm.Unlock()
 }
 
-func (s *RespCmdService) closeAllRespCmdConnect() {
+func (s *RespCmdService) CloseAllRespCmdConnect() {
 	s.rcm.Lock()
 	for c := range s.respConnMap {
-		c.Close()
+		if err := c.Close(); err != nil {
+			klog.Errorf("close conn %s err %s", c.Name(), err.Error())
+		} else {
+			klog.Debugf("close conn %s ok", c.Name())
+		}
 	}
 	s.rcm.Unlock()
 }

@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/cloudwego/kitex v0.6.1
 	github.com/tidwall/redcon v1.6.2
-	github.com/weedge/pkg v0.0.0-20230717110850-134cc8eb3429
+	github.com/weedge/pkg v0.0.0-20230718170023-2f35239a117a
 )
 
 require (
@@ -19,3 +19,8 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+//replace github.com/tidwall/redcon => ../redcon
+replace github.com/tidwall/redcon => github.com/weedge/redcon v0.0.0-20230717070621-d58434c2f821
+
+//replace github.com/weedge/pkg => ../pkg
