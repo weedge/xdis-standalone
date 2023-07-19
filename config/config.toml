@@ -1,0 +1,10 @@
+# resp cmd Server listen address
+addr = "0.0.0.0:6666"
+
+# auth password
+authPassword = ""
+
+# if connection receives no data after n seconds, it may be dead, close
+# 0 to disable and not check
+# idle conn close time (s)
+connKeepaliveInterval = 0
