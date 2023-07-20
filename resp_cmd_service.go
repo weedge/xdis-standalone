@@ -59,6 +59,8 @@ func (s *RespCmdService) Name() driver.RespServiceName {
 }
 
 func (s *RespCmdService) Close() (err error) {
+	s.CloseAllRespCmdConnect()
+
 	if s.redconSrv != nil {
 		if err = s.redconSrv.Close(); err != nil {
 			klog.Errorf("close redcon service err: %s", err.Error())
@@ -69,8 +71,6 @@ func (s *RespCmdService) Close() (err error) {
 	if err == nil {
 		klog.Infof("close resp cmd service ok")
 	}
-
-	s.CloseAllRespCmdConnect()
 	return
 }
 
@@ -104,7 +104,7 @@ func (s *RespCmdService) RegisterRespCmdConnHandle() {
 			}
 			ctx := context.WithValue(context.Background(), RespCmdCtxKey, conn.Context())
 			res, err := respConn.DoCmd(ctx, cmdOp, params)
-			klog.Debugf("resp cmd %s params %v res: %+v err: %v", cmdOp, params, res, err)
+			klog.Debugf("resp cmd %s params %v res: %+v to %s err: %v", cmdOp, params, res, conn.RemoteAddr(), err)
 			// nothing to do, has Write to connFd in DoCmd
 			if err == ErrNoops {
 				return
