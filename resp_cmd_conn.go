@@ -39,7 +39,13 @@ func (c *RespCmdConn) DoCmd(ctx context.Context, cmd string, cmdParams [][]byte)
 		return
 	}
 
-	res, err = f(ctx, c, cmdParams)
+	respConn, ok := ctx.Value(RespCmdCtxKey).(driver.IRespConn)
+	if !ok {
+		err = errors.New("respCmdCtxKey not IRespConn")
+		return
+	}
+
+	res, err = f(ctx, respConn, cmdParams)
 	if err != nil {
 		return
 	}
