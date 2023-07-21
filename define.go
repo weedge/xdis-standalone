@@ -13,7 +13,8 @@ const (
 )
 
 var (
-	ErrNoops = errors.New(":)")
+	ErrNoops          = errors.New(":)")
+	ErrNoInitRespConn = errors.New("not init resp conn")
 
 	ErrNotAuthenticated      = errors.New("ERR not authenticated")
 	ErrAuthenticationFailure = errors.New("ERR authentication failure")

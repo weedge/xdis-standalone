@@ -2,6 +2,7 @@ package standalone
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +33,9 @@ type RespCmdService struct {
 	rcm sync.Mutex
 	// resp cmd connects map
 	respConnMap map[driver.IRespConn]struct{}
+
+	// pub/sub
+	pubSub redcon.PubSub
 }
 
 func New(opts *config.RespCmdServiceOptions) (srv *RespCmdService) {
@@ -79,22 +83,52 @@ func (s *RespCmdService) SetRegisteredCmdHandles(handles map[string]driver.CmdHa
 }
 
 func (s *RespCmdService) RegisterRespCmdConnHandle() {
+	s.mux.HandleFunc("quit", func(conn redcon.Conn, cmd redcon.Command) {
+		// closed by srv
+		err := conn.Close()
+		if err != nil {
+			klog.Errorf("resp cmd quit connect close err: %s", err.Error())
+		}
+	})
+
+	// Publish to all pub/sub subscribers and return the number of
+	// messages that were sent.
+	s.mux.HandleFunc("publish", func(conn redcon.Conn, cmd redcon.Command) {
+		if len(cmd.Args) != 3 {
+			conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
+			return
+		}
+		count := s.pubSub.Publish(string(cmd.Args[1]), string(cmd.Args[2]))
+		conn.WriteInt(count)
+	})
+
+	// Subscribe to a pub/sub channel. The `Psubscribe` and
+	// `Subscribe` operations will detach the connection from the
+	// event handler and manage all network I/O for this connection
+	// in the background.
+	subHandler := func(conn redcon.Conn, cmd redcon.Command) {
+		if len(cmd.Args) < 2 {
+			conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
+			return
+		}
+		command := strings.ToLower(string(cmd.Args[0]))
+		for i := 1; i < len(cmd.Args); i++ {
+			if command == "psubscribe" {
+				s.pubSub.Psubscribe(conn, string(cmd.Args[i]))
+			} else {
+				s.pubSub.Subscribe(conn, string(cmd.Args[i]))
+			}
+		}
+	}
+	s.mux.HandleFunc("subscribe", subHandler)
+	s.mux.HandleFunc("psubscribe", subHandler)
+
 	for cmdOp := range s.handles {
 		s.mux.HandleFunc(cmdOp, func(conn redcon.Conn, cmd redcon.Command) {
 			cmdOp := utils.SliceByteToString(cmd.Args[0])
 			params := [][]byte{}
 			if len(cmd.Args) > 0 {
 				params = cmd.Args[1:]
-			}
-
-			switch cmdOp {
-			case "quit":
-				// closed by srv
-				err := conn.Close()
-				if err != nil {
-					klog.Errorf("resp cmd quit connect close err: %s", err.Error())
-				}
-				return
 			}
 
 			respConn, ok := conn.Context().(driver.IRespConn)
