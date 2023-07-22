@@ -16,6 +16,8 @@ type RespCmdConn struct {
 	isAuthed bool
 
 	redcon.Conn
+
+	closed bool
 }
 
 func (c *RespCmdConn) SetRedConn(redConn redcon.Conn) {
@@ -27,8 +29,13 @@ func (c *RespCmdConn) GetRemoteAddr() string {
 }
 
 func (c *RespCmdConn) Close() error {
+	c.closed = true
 	err := c.Conn.Close()
 	return err
+}
+
+func (c *RespCmdConn) Closed() bool {
+	return c.closed
 }
 
 func (c *RespCmdConn) DoCmd(ctx context.Context, cmd string, cmdParams [][]byte) (res interface{}, err error) {

@@ -33,3 +33,13 @@ const (
 	OK    = redcon.SimpleString("OK")
 	NOKEY = redcon.SimpleString("NOKEY")
 )
+
+var (
+	Delims = []byte("\r\n")
+)
+
+const (
+	GB uint64 = 1024 * 1024 * 1024
+	MB uint64 = 1024 * 1024
+	KB uint64 = 1024
+)
