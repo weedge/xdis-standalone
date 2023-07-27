@@ -10,50 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/weedge/pkg/utils"
+	"github.com/weedge/pkg/driver"
 )
-
-type DumpSrvInfoName string
-
-func (name DumpSrvInfoName) RespDumpName() []byte {
-	nameStr := fmt.Sprintf("# %s\r\n", name.FirstToUp())
-	return utils.String2Bytes(nameStr)
-}
-
-func (name DumpSrvInfoName) ToLow() []byte {
-	return utils.String2Bytes(strings.ToLower(string(name)))
-}
-
-func (name DumpSrvInfoName) FirstToUp() []byte {
-	str := strings.ToUpper(string(name)[:1]) + string(name)[1:]
-	return utils.String2Bytes(str)
-}
-
-type InfoPair struct {
-	Key   string
-	Value interface{}
-}
-
-func (pair InfoPair) RespDumpInfo() []byte {
-	pairInfo := fmt.Sprintf("%s:%v\r\n", pair.Key, pair.Value)
-	return utils.String2Bytes(pairInfo)
-}
-
-type DumpHandler func(w io.Writer)
-
-var RegisteredDumpHandlers = map[DumpSrvInfoName]DumpHandler{}
-var RegisteredDumpHandlerNames = []DumpSrvInfoName{}
-
-func RegisterDumpHandler(name DumpSrvInfoName, handler DumpHandler) {
-	if _, ok := RegisteredDumpHandlers[name]; !ok {
-		RegisteredDumpHandlerNames = append(RegisteredDumpHandlerNames, name)
-	}
-	RegisteredDumpHandlers[name] = handler
-}
-
-type ISrvInfo interface {
-	DumpBytes(name DumpSrvInfoName) []byte
-}
 
 type SrvInfo struct {
 	srv *RespCmdService
@@ -63,16 +21,18 @@ func NewSrvInfo(srv *RespCmdService) (srvInfo *SrvInfo) {
 	srvInfo = new(SrvInfo)
 	srvInfo.srv = srv
 
-	RegisterDumpHandler("server", srvInfo.DumpServer)
-	RegisterDumpHandler("memory", srvInfo.DumpMemory)
-	RegisterDumpHandler("gcstats", srvInfo.DumpGCStats)
+	driver.RegisterDumpHandler("server", srvInfo.DumpServer)
+	driver.RegisterDumpHandler("memory", srvInfo.DumpMemory)
+	driver.RegisterDumpHandler("gcstats", srvInfo.DumpGCStats)
+	driver.RegisterDumpHandler("keyspace", srvInfo.DumpKeySpace)
+	//driver.RegisterDumpHandler("keyspace", srvInfo.DumpKeySpaceNoStats)
 	// todo @weedge
-	//RegisterDumpHandler("storage", srvInfo.DumpStorageStats)
+	//driver.RegisterDumpHandler("storage", srvInfo.DumpStorageStats)
 
 	return
 }
 
-func (m *SrvInfo) DumpBytes(name DumpSrvInfoName) []byte {
+func (m *SrvInfo) DumpBytes(name driver.DumpSrvInfoName) []byte {
 	buf := &bytes.Buffer{}
 
 	if len(name) == 0 {
@@ -81,7 +41,7 @@ func (m *SrvInfo) DumpBytes(name DumpSrvInfoName) []byte {
 	}
 
 	buf.Write(name.RespDumpName())
-	dumpHandler, ok := RegisteredDumpHandlers[DumpSrvInfoName(name.ToLow())]
+	dumpHandler, ok := driver.RegisteredDumpHandlers[driver.DumpSrvInfoName(name.ToLow())]
 	if ok {
 		dumpHandler(buf)
 	}
@@ -90,10 +50,10 @@ func (m *SrvInfo) DumpBytes(name DumpSrvInfoName) []byte {
 }
 
 func (m *SrvInfo) dumpAll(w io.Writer) {
-	for i, name := range RegisteredDumpHandlerNames {
+	for i, name := range driver.RegisteredDumpHandlerNames {
 		w.Write(name.RespDumpName())
-		RegisteredDumpHandlers[name](w)
-		if i != len(RegisteredDumpHandlers)-1 {
+		driver.RegisteredDumpHandlers[name](w)
+		if i != len(driver.RegisteredDumpHandlers)-1 {
 			w.Write(Delims)
 		}
 	}
@@ -101,12 +61,12 @@ func (m *SrvInfo) dumpAll(w io.Writer) {
 
 func (m *SrvInfo) DumpServer(w io.Writer) {
 	m.DumpPairs(w,
-		InfoPair{"os", runtime.GOOS},
-		InfoPair{"process_id", os.Getpid()},
-		InfoPair{"addr", m.srv.opts.Addr},
-		InfoPair{"goroutine_num", runtime.NumGoroutine()},
-		InfoPair{"cgo_call_num", runtime.NumCgoCall()},
-		InfoPair{"resp_client_num", m.srv.RespCmdConnectNum()},
+		driver.InfoPair{Key: "os", Value: runtime.GOOS},
+		driver.InfoPair{Key: "process_id", Value: os.Getpid()},
+		driver.InfoPair{Key: "addr", Value: m.srv.opts.Addr},
+		driver.InfoPair{Key: "goroutine_num", Value: runtime.NumGoroutine()},
+		driver.InfoPair{Key: "cgo_call_num", Value: runtime.NumCgoCall()},
+		driver.InfoPair{Key: "resp_client_num", Value: m.srv.RespCmdConnectNum()},
 	)
 }
 
@@ -123,10 +83,10 @@ func (m *SrvInfo) DumpGCStats(w io.Writer) {
 	}
 
 	m.DumpPairs(w,
-		InfoPair{"gc_last_time", st.LastGC.Format("2006/01/02 15:04:05.000")},
-		InfoPair{"gc_num", st.NumGC},
-		InfoPair{"gc_pause_total", st.PauseTotal.String()},
-		InfoPair{"gc_pause_history", strings.Join(h, ",")},
+		driver.InfoPair{Key: "gc_last_time", Value: st.LastGC.Format("2006/01/02 15:04:05.000")},
+		driver.InfoPair{Key: "gc_num", Value: st.NumGC},
+		driver.InfoPair{Key: "gc_pause_total", Value: st.PauseTotal.String()},
+		driver.InfoPair{Key: "gc_pause_history", Value: strings.Join(h, ",")},
 	)
 }
 
@@ -147,18 +107,18 @@ func (m *SrvInfo) DumpMemory(w io.Writer) {
 	runtime.ReadMemStats(&mem)
 
 	m.DumpPairs(w,
-		InfoPair{"mem_alloc", getMemoryHuman(mem.Alloc)},
-		InfoPair{"mem_sys", getMemoryHuman(mem.Sys)},
-		InfoPair{"mem_looksups", getMemoryHuman(mem.Lookups)},
-		InfoPair{"mem_mallocs", getMemoryHuman(mem.Mallocs)},
-		InfoPair{"mem_frees", getMemoryHuman(mem.Frees)},
-		InfoPair{"mem_total", getMemoryHuman(mem.TotalAlloc)},
-		InfoPair{"mem_heap_alloc", getMemoryHuman(mem.HeapAlloc)},
-		InfoPair{"mem_heap_sys", getMemoryHuman(mem.HeapSys)},
-		InfoPair{"mem_head_idle", getMemoryHuman(mem.HeapIdle)},
-		InfoPair{"mem_head_inuse", getMemoryHuman(mem.HeapInuse)},
-		InfoPair{"mem_head_released", getMemoryHuman(mem.HeapReleased)},
-		InfoPair{"mem_head_objects", mem.HeapObjects},
+		driver.InfoPair{Key: "mem_alloc", Value: getMemoryHuman(mem.Alloc)},
+		driver.InfoPair{Key: "mem_sys", Value: getMemoryHuman(mem.Sys)},
+		driver.InfoPair{Key: "mem_looksups", Value: getMemoryHuman(mem.Lookups)},
+		driver.InfoPair{Key: "mem_mallocs", Value: getMemoryHuman(mem.Mallocs)},
+		driver.InfoPair{Key: "mem_frees", Value: getMemoryHuman(mem.Frees)},
+		driver.InfoPair{Key: "mem_total", Value: getMemoryHuman(mem.TotalAlloc)},
+		driver.InfoPair{Key: "mem_heap_alloc", Value: getMemoryHuman(mem.HeapAlloc)},
+		driver.InfoPair{Key: "mem_heap_sys", Value: getMemoryHuman(mem.HeapSys)},
+		driver.InfoPair{Key: "mem_head_idle", Value: getMemoryHuman(mem.HeapIdle)},
+		driver.InfoPair{Key: "mem_head_inuse", Value: getMemoryHuman(mem.HeapInuse)},
+		driver.InfoPair{Key: "mem_head_released", Value: getMemoryHuman(mem.HeapReleased)},
+		driver.InfoPair{Key: "mem_head_objects", Value: mem.HeapObjects},
 	)
 }
 
@@ -166,7 +126,23 @@ func (m *SrvInfo) DumpStorageStats(w io.Writer) {
 
 }
 
-func (m *SrvInfo) DumpPairs(w io.Writer, pairs ...InfoPair) {
+// # Keyspace
+// db0:keys=1,expires=0,avg_ttl=0
+func (m *SrvInfo) DumpKeySpace(w io.Writer) {
+	data := m.srv.store.StatsInfo("keyspace")
+	if items, ok := data["keyspace"]; ok {
+		m.DumpPairs(w, items...)
+	}
+}
+
+func (m *SrvInfo) DumpKeySpaceNoStats(w io.Writer) {
+	data := m.srv.store.StatsInfo("existkeydb")
+	if items, ok := data["existkeydb"]; ok {
+		m.DumpPairs(w, items...)
+	}
+}
+
+func (m *SrvInfo) DumpPairs(w io.Writer, pairs ...driver.InfoPair) {
 	for _, pair := range pairs {
 		w.Write(pair.RespDumpInfo())
 	}

@@ -34,7 +34,7 @@ func slotsHashKeyCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 	}
 
 	data := make([]redcon.SimpleInt, 0, len(cmdParams))
-	slots, err := c.Db().DBSlot().SlotsHashKey(ctx, cmdParams...)
+	slots, err := c.Db().(driver.IDBSlots).DBSlot().SlotsHashKey(ctx, cmdParams...)
 	for _, slot := range slots {
 		data = append(data, redcon.SimpleInt(slot))
 	}
@@ -64,7 +64,7 @@ func slotsInfoCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (
 		}
 	}
 
-	slotsInfo, err := c.Db().DBSlot().SlotsInfo(ctx, uint64(start), uint64(count))
+	slotsInfo, err := c.Db().(driver.IDBSlots).DBSlot().SlotsInfo(ctx, uint64(start), uint64(count))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func slotsMgrtOneCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 	}
 
 	key := cmdParams[3]
-	migrateCn, err := c.Db().DBSlot().MigrateOneKey(ctx, addr, timeout, key)
+	migrateCn, err := c.Db().(driver.IDBSlots).DBSlot().MigrateOneKey(ctx, addr, timeout, key)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func slotsMgrtSlotCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byt
 		return 0, ErrCmdParams
 	}
 
-	migrateCn, err := c.Db().DBSlot().MigrateSlotOneKey(ctx, addr, timeout, uint64(slot))
+	migrateCn, err := c.Db().(driver.IDBSlots).DBSlot().MigrateSlotOneKey(ctx, addr, timeout, uint64(slot))
 	if err != nil {
 		return 0, ErrCmdParams
 	}
@@ -154,7 +154,7 @@ func slotsMgrtTagOneCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]b
 	}
 
 	key := cmdParams[3]
-	migrateCn, err := c.Db().DBSlot().MigrateKeyWithSameTag(ctx, addr, timeout, key)
+	migrateCn, err := c.Db().(driver.IDBSlots).DBSlot().MigrateKeyWithSameTag(ctx, addr, timeout, key)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func slotsMgrtTagSlotCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]
 		return 0, ErrCmdParams
 	}
 
-	migrateCn, err := c.Db().DBSlot().MigrateSlotKeyWithSameTag(ctx, addr, timeout, uint64(slot))
+	migrateCn, err := c.Db().(driver.IDBSlots).DBSlot().MigrateSlotKeyWithSameTag(ctx, addr, timeout, uint64(slot))
 	if err != nil {
 		return 0, ErrCmdParams
 	}
@@ -224,7 +224,7 @@ func slotsRestoreCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 		}
 	}
 
-	err = c.Db().DBSlot().SlotsRestore(ctx, objs...)
+	err = c.Db().(driver.IDBSlots).DBSlot().SlotsRestore(ctx, objs...)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func slotsRestoreCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 // SLOTSCHECK
 // for debug/test, don't use in product
 func slotsCheckCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (res interface{}, err error) {
-	err = c.Db().DBSlot().SlotsCheck(ctx)
+	err = c.Db().(driver.IDBSlots).DBSlot().SlotsCheck(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func slotsDelCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (r
 		slots[i] = uint64(slot)
 	}
 
-	slotsInfo, err := c.Db().DBSlot().SlotsDel(ctx, slots...)
+	slotsInfo, err := c.Db().(driver.IDBSlots).DBSlot().SlotsDel(ctx, slots...)
 	if err != nil {
 		return nil, err
 	}

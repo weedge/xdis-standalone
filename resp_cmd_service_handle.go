@@ -5,6 +5,7 @@ import (
 
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/tidwall/redcon"
+	"github.com/weedge/pkg/driver"
 )
 
 // QuitCmd connect is closed by srv
@@ -26,9 +27,9 @@ func (s *RespCmdService) InfoCmd(conn redcon.Conn, cmd redcon.Command) {
 		return
 	}
 
-	section := DumpSrvInfoName("")
+	section := driver.DumpSrvInfoName("")
 	if len(cmd.Args) == 2 {
-		section = DumpSrvInfoName(cmd.Args[1])
+		section = driver.DumpSrvInfoName(cmd.Args[1])
 	}
 	blukInfo := s.info.DumpBytes(section)
 	conn.WriteBulk(blukInfo)

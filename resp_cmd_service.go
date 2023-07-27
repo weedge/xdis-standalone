@@ -26,7 +26,7 @@ type RespCmdService struct {
 	handles   map[string]driver.CmdHandle
 
 	// storager
-	store driver.IStorager
+	store driver.IStatsStorager
 
 	// mutex lock for respConnMap add/delete
 	rcm sync.Mutex
@@ -37,7 +37,7 @@ type RespCmdService struct {
 	pubSub redcon.PubSub
 
 	// info service dump info
-	info ISrvInfo
+	info driver.ISrvInfo
 }
 
 func New(opts *config.RespCmdServiceOptions) (srv *RespCmdService) {
@@ -71,7 +71,7 @@ func New(opts *config.RespCmdServiceOptions) (srv *RespCmdService) {
 }
 
 func (s *RespCmdService) SetStorager(store driver.IStorager) {
-	s.store = store
+	s.store = store.(driver.IStatsStorager)
 }
 
 func (s *RespCmdService) Name() driver.RespServiceName {
@@ -249,6 +249,6 @@ func (s *RespCmdService) RespCmdConnectNum() int {
 	return n
 }
 
-func (s *RespCmdService) SetSrvInfo(info ISrvInfo) {
+func (s *RespCmdService) SetSrvInfo(info driver.ISrvInfo) {
 	s.info = info
 }
