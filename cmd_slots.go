@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/kitex/pkg/utils"
@@ -35,6 +36,9 @@ func slotsHashKeyCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 
 	data := make([]redcon.SimpleInt, 0, len(cmdParams))
 	slots, err := c.Db().(driver.IDBSlots).DBSlot().SlotsHashKey(ctx, cmdParams...)
+	if err != nil {
+		return
+	}
 	for _, slot := range slots {
 		data = append(data, redcon.SimpleInt(slot))
 	}
@@ -43,28 +47,35 @@ func slotsHashKeyCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 	return
 }
 
-// SLOTSINFO [start] [count]
+// SLOTSINFO start offset [WITHSIZE]
 func slotsInfoCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (res interface{}, err error) {
-	if len(cmdParams) > 2 {
+	if len(cmdParams) > 3 {
 		return nil, ErrCmdParams
 	}
 
-	var start, count int64 = 0, 0
+	var start, count uint64 = 0, 0
+	var withSize bool = false
 	switch len(cmdParams) {
+	case 3:
+		switch strings.ToLower(utils.SliceByteToString(cmdParams[2])) {
+		case "withsize":
+			withSize = true
+		}
+		fallthrough
 	case 2:
-		count, err = strconv.ParseInt(utils.SliceByteToString(cmdParams[1]), 10, 64)
+		count, err = strconv.ParseUint(utils.SliceByteToString(cmdParams[1]), 10, 64)
 		if err != nil {
 			return nil, ErrCmdParams
 		}
 		fallthrough
 	case 1:
-		start, err = strconv.ParseInt(utils.SliceByteToString(cmdParams[0]), 10, 64)
+		start, err = strconv.ParseUint(utils.SliceByteToString(cmdParams[0]), 10, 64)
 		if err != nil {
 			return nil, ErrCmdParams
 		}
 	}
 
-	slotsInfo, err := c.Db().(driver.IDBSlots).DBSlot().SlotsInfo(ctx, uint64(start), uint64(count))
+	slotsInfo, err := c.Db().(driver.IDBSlots).DBSlot().SlotsInfo(ctx, start, count, withSize)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +150,7 @@ func slotsMgrtSlotCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byt
 
 	migrateCn, err := c.Db().(driver.IDBSlots).DBSlot().MigrateSlotOneKey(ctx, addr, timeout, uint64(slot))
 	if err != nil {
-		return 0, ErrCmdParams
+		return 0, err
 	}
 	res = redcon.SimpleInt(migrateCn)
 
@@ -177,7 +188,7 @@ func slotsMgrtTagSlotCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]
 
 	migrateCn, err := c.Db().(driver.IDBSlots).DBSlot().MigrateSlotKeyWithSameTag(ctx, addr, timeout, uint64(slot))
 	if err != nil {
-		return 0, ErrCmdParams
+		return 0, err
 	}
 	res = redcon.SimpleInt(migrateCn)
 
@@ -207,20 +218,12 @@ func slotsRestoreCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte
 		if err != nil {
 			return nil, ErrCmdParams
 		}
-		expireat := int64(0)
-		if ttlms != 0 {
-			if v, ok := TTLmsToExpireAt(ttlms); ok && v > 0 {
-				expireat = v
-			} else {
-				return nil, ErrCmdParams
-			}
-		}
 
 		value := cmdParams[i*3+2]
 		objs[i] = &driver.SlotsRestoreObj{
 			Key:   key,
 			Val:   value,
-			TTLms: expireat,
+			TTLms: ttlms,
 		}
 	}
 
@@ -245,7 +248,7 @@ func slotsCheckCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) 
 	return
 }
 
-// SLOTSDEL
+// SLOTSDEL slot ...
 func slotsDelCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (res interface{}, err error) {
 	if len(cmdParams) < 1 {
 		return nil, ErrCmdParams
