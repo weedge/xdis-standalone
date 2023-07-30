@@ -190,8 +190,19 @@ func slotsMgrtTagSlotCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]
 	if err != nil {
 		return 0, err
 	}
-	res = redcon.SimpleInt(migrateCn)
 
+	slotsInfo, err := c.Db().(driver.IDBSlots).DBSlot().SlotsInfo(ctx, uint64(slot), 0, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// remain slot
+	data := []any{redcon.SimpleInt(migrateCn), redcon.SimpleInt(0)}
+	if len(slotsInfo) == 1 {
+		data[1] = redcon.SimpleInt(slotsInfo[0].Size)
+	}
+
+	res = data
 	return
 }
 
