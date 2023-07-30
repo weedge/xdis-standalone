@@ -137,7 +137,7 @@ func selectCmd(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (res
 		return
 	}
 
-	db, err := c.(*RespCmdConn).srv.store.Select(ctx, index)
+	db, err := c.Storager().Select(ctx, index)
 	if err != nil {
 		return
 	}
@@ -158,7 +158,7 @@ func flushdb(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (res i
 }
 
 func flushall(ctx context.Context, c driver.IRespConn, cmdParams [][]byte) (res interface{}, err error) {
-	err = c.(*RespCmdConn).srv.store.FlushAll(ctx)
+	err = c.Storager().FlushAll(ctx)
 	if err != nil {
 		return
 	}

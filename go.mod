@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/cloudwego/kitex v0.6.1
 	github.com/tidwall/redcon v1.6.2
-	github.com/weedge/pkg v0.0.0-20230730110910-2af194257737
+	github.com/weedge/pkg v0.0.0-20230730143941-947a71ed5c56
 )
 
 require (

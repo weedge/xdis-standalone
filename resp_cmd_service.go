@@ -163,6 +163,7 @@ func (s *RespCmdService) OnAccept(conn redcon.Conn) bool {
 	respConn := s.InitRespConn(context.Background(), 0)
 	respCmdConn := respConn.(*RespCmdConn)
 	respCmdConn.SetRedConn(conn)
+	respCmdConn.SetStorager(s.store)
 	s.AddRespCmdConn(respCmdConn)
 
 	// set ctx
