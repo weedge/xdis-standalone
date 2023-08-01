@@ -65,13 +65,12 @@ func New(opts *config.RespCmdServiceOptions) (srv *RespCmdService) {
 	srv.mux.HandleFunc("subscribe", srv.SubscribeCmd)
 	srv.mux.HandleFunc("psubscribe", srv.SubscribeCmd)
 
-	srv.info = NewSrvInfo(srv)
-
 	return
 }
 
 func (s *RespCmdService) SetStorager(store driver.IStorager) {
 	s.store = store.(driver.IStatsStorager)
+	s.info = NewSrvInfo(s)
 }
 
 func (s *RespCmdService) Name() driver.RespServiceName {
@@ -113,8 +112,10 @@ func (s *RespCmdService) RegisterRespCmdConnHandle() {
 				return
 			}
 			ctx := context.WithValue(context.Background(), RespCmdCtxKey, conn.Context())
+			startTime := time.Now()
 			res, err := respConn.DoCmd(ctx, cmdOp, params)
-			klog.Debugf("resp cmd %s params %v res: %+v to %s err: %v", cmdOp, params, res, conn.RemoteAddr(), err)
+			klog.Debugf("resp cmd %s params %v res: %+v to %s err: %v cost: %d ms", cmdOp, params, res, conn.RemoteAddr(), err, time.Since(startTime).Milliseconds())
+
 			// nothing to do, has Write to connFd in DoCmd
 			if err == ErrNoops {
 				return
