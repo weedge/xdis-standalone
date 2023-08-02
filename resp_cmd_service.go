@@ -114,7 +114,7 @@ func (s *RespCmdService) RegisterRespCmdConnHandle() {
 			ctx := context.WithValue(context.Background(), RespCmdCtxKey, conn.Context())
 			startTime := time.Now()
 			res, err := respConn.DoCmd(ctx, cmdOp, params)
-			klog.Debugf("resp cmd %s params %v res: %+v to %s err: %v cost: %d ms", cmdOp, params, res, conn.RemoteAddr(), err, time.Since(startTime).Milliseconds())
+			klog.Debugf("resp cmd %s params %s res: %+v to %s err: %v cost: %d ms", cmdOp, params, res, conn.RemoteAddr(), err, time.Since(startTime).Milliseconds())
 
 			// nothing to do, has Write to connFd in DoCmd
 			if err == ErrNoops {
